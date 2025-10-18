@@ -1,17 +1,23 @@
 import numpy as np
 import random
+import matplotlib.pyplot as plt
 
 
 def generate_grid(Nx,Ny):
 
     LV_grid= np.random.choice([-1, 1], size=(Ny, Nx))
     
-    print(LV_grid)
+    #print(LV_grid)
     return (LV_grid)
 
 
 def grid_sweep(grid, Nx,Ny,J,B, no_sweeps,kT):
-    for k in range (0,no_sweeps):
+    avg_mag_arr = []
+
+    for k in range (0,no_sweeps+1):
+        avg_magnetisation = np.sum(grid)/(Nx*Ny)
+        avg_mag_arr.append(avg_magnetisation)
+
         for i in range(0,Ny):
         #Pseudocode yes Ny-1 but remember python is exclusive on upper bound
         
@@ -37,8 +43,9 @@ def grid_sweep(grid, Nx,Ny,J,B, no_sweeps,kT):
                 if probability > 1 or np.random.rand() < probability:
                     grid[i,j] = flipped
                 
-    avg_magnetisation = np.sum(grid)/(Nx*Ny)
-    return avg_magnetisation
+    #avg_magnetisation = np.sum(grid)/(Nx*Ny)
+    #return avg_magnetisation
+    return avg_mag_arr
 
             
 
@@ -48,17 +55,22 @@ def grid_sweep(grid, Nx,Ny,J,B, no_sweeps,kT):
 Nx = int(input("Enter number of grid points in x-direction (Nx): "))
 Ny = int(input("Enter number of grid points in y-direction (Ny): "))
 grid = generate_grid(Nx, Ny)
-
-
+print(grid)
+print("Avg magnetisation is: ", np.sum(grid)/ (Nx*Ny))
 
 J = float(input("Enter interaction strength (J): "))
 B = float(input("Enter external magnetic field (B): "))
 no_sweeps = int(input("Enter number of sweeps: "))
 kT = 1
-print(grid_sweep(grid, Nx, Ny, J, B, no_sweeps, kT))
+sweep_arr = np.arange(0,no_sweeps+1)
+avg_mag_arr = grid_sweep(grid, Nx, Ny, J, B, no_sweeps, kT)
+print("Final magnetisation after ", no_sweeps, "sweeps is: ", avg_mag_arr[-1])
 
 
-
-
+plt.plot(sweep_arr, avg_mag_arr)
+plt.xlabel('Number of Sweeps')
+plt.ylabel('Average Magnetisation')
+plt.title('Average Magnetisation vs Number of Sweeps')
+plt.show()
 
 
