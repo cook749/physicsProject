@@ -1,0 +1,4 @@
+B = 0.06, Fitting param Tau: 141384.11400711842, Fitting param nu 1.623313472722118e-05
+B = 0.06999999999999999, Fitting param Tau: 87078.18727797606, Fitting param nu 2.508039414927773e-05
+B = 0.08, Fitting param Tau: 14692.406296413204, Fitting param nu 7.599383214663994e-05
+B = 0.09, Fitting param Tau: 5247.08186371316, Fitting param nu 0.00022459771271642973

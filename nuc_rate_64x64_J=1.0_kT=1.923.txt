@@ -1,0 +1,1 @@
+B = 0.07, Fitting param Tau: 515.0421295973599, Fitting param nu 0.0012937193969906194
