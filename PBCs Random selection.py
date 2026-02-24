@@ -64,31 +64,31 @@ def grid_sweep_equilibrium(Nx, Ny, J, B, beta, no_sweeps, grid):
 
         # Perform one Monte Carlo Sweep (N random attempts)
 
+        for x in range (N):
+            i = np.random.randint(0, Ny)
+            j = np.random.randint(0, Nx)
+            
+            # Flip the current spin
+            original = grid[i,j]
+            flipped = -grid[i,j]
 
-        for i in range(0,Ny):
-        #Pseudocode yes Ny-1 but remember python is exclusive on upper bound
-        
-            for j in range (0,Nx):
-                # Flip the current spin
-                original = grid[i,j]
-                flipped = -grid[i,j]
+            
+            #Tally the 4 nearest neighbours, considering the periodic boundary conditions - Modulo thing works by:
+            #If at the start, we get a negative modulo, causing to wrap to the end (how many we need to get from -1 to -(Nx-1)) i.e takes to Nx-1
+            #If at the end, we get Nx-1 + 1 = Nx, which modulo with Nx is 0, taking us to start.
+            #Similar logic to the top and bottom
+            #If in the middle, Nx and Ny > i or j, so modulo returns i or j (i.e divides 0 times, and remainder is i or j)
 
-                
-                #Tally the 4 nearest neighbours, considering the periodic boundary conditions - Modulo thing works by:
-                #If at the start, we get a negative modulo, causing to wrap to the end (how many we need to get from -1 to -(Nx-1)) i.e takes to Nx-1
-                #If at the end, we get Nx-1 + 1 = Nx, which modulo with Nx is 0, taking us to start.
-                #Similar logic to the top and bottom
-                #If in the middle, Nx and Ny > i or j, so modulo returns i or j (i.e divides 0 times, and remainder is i or j)
+            
+            f = grid[(i-1)%Ny,j] + grid[(i+1)%Ny,j] + grid[i,(j-1)%Nx] + grid[i,(j+1)%Nx]
+            energy_change = 2*J* grid[i,j] * f + 2*B*grid[i,j]
+            exponent = -energy_change*beta
 
-                
-                f = grid[(i-1)%Ny,j] + grid[(i+1)%Ny,j] + grid[i,(j-1)%Nx] + grid[i,(j+1)%Nx]
-                energy_change = 2*J* grid[i,j] * f + 2*B*grid[i,j]
-                exponent = -energy_change*beta
-
-                #See if we keep the flip
-                probability = np.exp(exponent)
-                if probability > 1 or np.random.rand() < probability:
-                    grid[i,j] = flipped
+            #See if we keep the flip
+            probability = np.exp(exponent)
+            if probability > 1 or np.random.rand() < probability:
+                grid[i,j] = flipped
+       
        
                     
     return sweep_arr, avg_mag_arr, grid
@@ -175,7 +175,7 @@ def single_nucleation_run(saved_grid, Nx, Ny, J, B, beta):
 def single_nucleation_run(saved_grid, Nx, Ny, J, B, beta):
     grid = saved_grid.copy()
     N = Nx * Ny
-    limit = 3000000  
+    limit = 300000 # Safety cap  
     
     # 1. PRE-CALCULATE METROPOLIS PROBABILITIES
     # There are only 5 possible neighbor sums in a 2D lattice: -4, -2, 0, 2, 4
@@ -200,37 +200,51 @@ def single_nucleation_run(saved_grid, Nx, Ny, J, B, beta):
     for i in range(Ny):
         for j in range(Nx):
             current_mag_sum += grid[i, j]
+
+        
+        
             
     carlo_sweeps = 0
     while carlo_sweeps < limit:
-        # Check condition using the paper's 0.7 cutoff [cite: 113, 118]
-        if (current_mag_sum / N) < 0.7:
+        # Check condition using the paper's 'equilibrium' cutoff
+        if (current_mag_sum / N) < -0.8:
             return carlo_sweeps
 
         carlo_sweeps += 1
 
-        # 3. SEQUENTIAL UPDATE SWEEP (Strictly row-by-row) [cite: 80, 246]
-        for i in range(Ny):
-            for j in range(Nx):
-                s_i = grid[i, j]
-                
-                # Nearest Neighbors Sum [cite: 79, 100]
-                neighbors_sum = (grid[(i-1)%Ny, j] + grid[(i+1)%Ny, j] + 
-                                 grid[i, (j-1)%Nx] + grid[i, (j+1)%Nx])
-                
-                # Map neighbor sum to lookup index (e.g., -4 -> 0, 0 -> 2, 4 -> 4)
-                idx = int((neighbors_sum + 4) // 2)
-                
-                if s_i == 1:
-                    p = prob_lookup_pos[idx]
-                else:
-                    p = prob_lookup_neg[idx]
+        # 3. Random UPDATE SWEEP (What paper uses) 
 
-                # Metropolis Acceptance [cite: 81, 96]
-                if p >= 1.0 or np.random.rand() < p:
-                    grid[i, j] = -s_i
+
+        for k in range(N):
+        # Pick a random site
+            j = np.random.randint(0, Nx)
+            i = np.random.randint(0, Ny)
+           
+            s_i = grid[i,j]
+            
+            
+            #PBCs
+            neighbours_sum = (grid[(i-1)%Ny, j] + grid[(i+1)%Ny, j] + 
+                                 grid[i, (j-1)%Nx] + grid[i, (j+1)%Nx])
+
+
+
+
+
+       
+                # Map neighbor sum to lookup index (e.g., -4 -> 0, 0 -> 2, 4 -> 4)
+            idx = int((neighbours_sum + 4) // 2)
+                
+            if s_i == 1:
+                p = prob_lookup_pos[idx]
+            else:
+                p = prob_lookup_neg[idx]
+
+            # Metropolis Acceptance [cite: 81, 96]
+            if p >= 1.0 or np.random.rand() < p:
+                grid[i,j] = -s_i
                     # Update the magnetization sum incrementally
-                    current_mag_sum -= 2 * s_i 
+                current_mag_sum -= 2 * s_i 
                     
     return limit
 
@@ -242,7 +256,7 @@ def data_sweeps(L, J, B, beta, num_runs, plot=False):
     Runs multiple nucleation events in PARALLEL using joblib.
     """
     B_quench = -abs(B) 
-    filename_in = f'equil_state_{L}x{L}_J={J}_beta={beta}_B={abs(B)}.npy'
+    filename_in = f'Rand_PBC_equil_state_{L}x{L}_J={J}_beta={beta}_B={abs(B)}.npy'
     
     try:
         base_grid = np.load(filename_in)
@@ -251,7 +265,7 @@ def data_sweeps(L, J, B, beta, num_runs, plot=False):
         return [], [] # Return empty if failed
 
 
-    filename_out = f"{L}x{L}_nucleation_J={J}_beta={beta}_B={B_quench}.txt"
+    filename_out = f"Rand_PBC_{L}x{L}_nucleation_J={J}_beta={beta}_B={B_quench}.txt"
     print(f"Starting {num_runs} nucleation runs. Saving to {filename_out}")
     
     # -- Parallel Execution --
@@ -296,7 +310,7 @@ def survival_model(t, nu, td):
     return -nu * (t - td)
 
 def data_analysis(L, J, B, beta, plot=True):
-    filename = f"{L}x{L}_nucleation_J={J}_beta={beta}_B={B}.txt"
+    filename = f"Rand_PBC_{L}x{L}_nucleation_J={J}_beta={beta}_B={B}.txt"
     try:
         nucleation_times = np.loadtxt(filename)
     except OSError:
@@ -418,7 +432,7 @@ def main():
             sweep_arr, avg_mag_arr, grid = grid_sweep_equilibrium(Nx, Ny, J, B, beta, no_sweeps, grid)
             print(f"Done in {time.time()-start:.2f}s")
             
-            filename = f"equil_state_{Nx}x{Ny}_J={J}_beta={beta}_B={B}.npy"
+            filename = f"Rand_PBC_equil_state_{Nx}x{Ny}_J={J}_beta={beta}_B={B}.npy"
             np.save(filename, grid)
             print(f"Saved to: {filename}")
             
@@ -444,7 +458,7 @@ def main():
             # UPDATED: Ask for Beta directly
             beta = float(input("Enter Beta (1/kT): "))
             
-            Tau, nu = data_analysis(L, J, B, beta, plot=True)
+            Tau, nu, avg_time = data_analysis(L, J, B, beta, plot=True)
             print(f"Calculated Tau (Median): {Tau}")
 
         elif choice == '4':
@@ -471,7 +485,7 @@ def main():
                 rand_grid = generate_random_grid(L, L)
                 _, _, eq_grid = grid_sweep_equilibrium(L, L, J, B_val, beta, no_sweeps, rand_grid)
                 
-                filename_eq = f"equil_state_{L}x{L}_J={J}_beta={beta}_B={B_val}.npy"
+                filename_eq = f"Rand_PBC_equil_state_{L}x{L}_J={J}_beta={beta}_B={B_val}.npy"
                 np.save(filename_eq, eq_grid)
                 
                 # 2. Nucleate (Parallel)
@@ -480,7 +494,7 @@ def main():
                 # 3. Analyze
                 Tau, nu_fit, avg_time = data_analysis(L, J, -B_val, beta, plot=False)
                 
-                filename_nuc = f"nuc_rate_{L}x{L}_J={J}_beta={beta}.txt"
+                filename_nuc = f"Rand_PBC_nuc_rate_{L}x{L}_J={J}_beta={beta}.txt"
                 with open(filename_nuc, 'a') as f:
                     f.write(f"{B_val} {Tau} {nu_fit} {avg_time}\n")
                     
